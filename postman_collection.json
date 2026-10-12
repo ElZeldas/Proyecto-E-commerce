@@ -1,0 +1,289 @@
+{
+  "info": {
+    "_postman_id": "b71e9a40-8c42-4d38-9a21-6c8f2b10e991",
+    "name": "Microsip ERP Read-Only REST API",
+    "description": "Colección oficial Postman para consumir la API REST de Solo Lectura (READ ONLY) de Microsip ERP sobre Firebird SQL (192.168.1.5 - E:\\Microsip datos\\CAPACITACION.FDB).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "jwt_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "microsip_user",
+      "value": "SYSDBA",
+      "type": "string"
+    },
+    {
+      "key": "microsip_password",
+      "value": "masterkey",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Autenticación - POST /login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "var jsonData = pm.response.json();",
+              "if (jsonData && jsonData.token) {",
+              "    pm.collectionVariables.set('jwt_token', jsonData.token);",
+              "    console.log('JWT Token almacenado automáticamente en {{jwt_token}}');",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{microsip_user}}\",\n  \"password\": \"{{microsip_password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/login",
+          "host": ["{{base_url}}"],
+          "path": ["login"]
+        },
+        "description": "Autentica las credenciales del usuario Microsip contra Firebird y guarda automáticamente el JWT en la variable `{{jwt_token}}`."
+      },
+      "response": [
+        {
+          "name": "200 OK - Token Generado",
+          "originalRequest": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"usuario_microsip\",\n  \"password\": \"password_microsip\"\n}"
+            },
+            "url": {"raw": "{{base_url}}/login", "host": ["{{base_url}}"], "path": ["login"]}
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "body": "{\n  \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "2. Health Check - GET /api/health",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/health",
+          "host": ["{{base_url}}"],
+          "path": ["api", "health"]
+        },
+        "description": "Verifica la salud de la API y la conexión TCP/IP remota con el motor Firebird en 192.168.1.5."
+      },
+      "response": [
+        {
+          "name": "200 OK - Base de Datos Online",
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "body": "{\n  \"status\": \"ok\",\n  \"database\": \"online\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "3. Listar Artículos - GET /api/articulos",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwt_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/articulos?limit=100",
+          "host": ["{{base_url}}"],
+          "path": ["api", "articulos"],
+          "query": [
+            {
+              "key": "limit",
+              "value": "100"
+            }
+          ]
+        },
+        "description": "Obtiene los primeros 100 artículos de Microsip con SKU, Nombre, Último Precio/Costo, Existencia y Fecha de Consulta."
+      },
+      "response": [
+        {
+          "name": "200 OK - Lista de Artículos",
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "body": "[\n  {\n    \"sku\": \"621\",\n    \"nombre\": \"TUBO GALVAN 13MM 1/2\",\n    \"ultimo_precio\": 125.50,\n    \"existencia\": 200,\n    \"fecha_consulta\": \"2026-10-06\"\n  }\n]"
+        }
+      ]
+    },
+    {
+      "name": "4. Filtrar Artículos por SKU - GET /api/articulos?sku=621",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwt_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/articulos?sku=621",
+          "host": ["{{base_url}}"],
+          "path": ["api", "articulos"],
+          "query": [
+            {
+              "key": "sku",
+              "value": "621"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "5. Filtrar Artículos por Nombre - GET /api/articulos?nombre=tubo",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwt_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/articulos?nombre=tubo",
+          "host": ["{{base_url}}"],
+          "path": ["api", "articulos"],
+          "query": [
+            {
+              "key": "nombre",
+              "value": "tubo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "6. Consultar Artículo Individual - GET /api/articulos/621",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwt_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/articulos/621",
+          "host": ["{{base_url}}"],
+          "path": ["api", "articulos", "621"]
+        }
+      },
+      "response": [
+        {
+          "name": "200 OK - Artículo Individual",
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "body": "{\n  \"sku\": \"621\",\n  \"nombre\": \"TUBO GALVAN 13MM 1/2\",\n  \"ultimo_precio\": 125.50,\n  \"existencia\": 200,\n  \"fecha_consulta\": \"2026-10-06\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "7. Reporte Inspector Fase 1 - GET /api/inspector",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwt_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/inspector",
+          "host": ["{{base_url}}"],
+          "path": ["api", "inspector"]
+        }
+      }
+    }
+  ]
+}

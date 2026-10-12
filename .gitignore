@@ -1,0 +1,37 @@
+# Entornos virtuales
+venv/
+env_desktop/
+env/
+ENV/
+.venv/
+
+# Archivos de configuración sensibles con credenciales
+.env
+.env.local
+.env.*.local
+
+# Salida de compilación de PyInstaller y ejecutables
+dist/
+build/
+
+# Archivos de caché de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Logs y depuración
+logs/
+*.log
+error_*.log
+
+# Preferencias y archivos locales de usuario
+.microsip_calc_prefs.json
+*.user
+
+# Archivos temporales del sistema y editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

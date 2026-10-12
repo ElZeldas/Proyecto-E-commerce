@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reporte de Almacenes</title>
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+    rel="stylesheet"
+  />
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"></script>
+  <style>
+    body {
+      background-color: #f4f6f9;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+    .table-container {
+      max-height: 600px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Barra de Navegación -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+    <div class="container-fluid px-4">
+      <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="/">
+        <i class="bi bi-box-seam text-warning fs-4"></i>
+        <span>Reporte de Almacenes</span>
+      </a>
+      <div class="d-flex align-items-center gap-2">
+        <a href="/" class="btn btn-outline-light btn-sm fw-semibold">
+          <i class="bi bi-arrow-left me-1"></i> Volver al Inicio
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container-fluid px-4 py-4">
+    <div class="row mb-4">
+      <div class="col-12 col-md-4">
+        <label class="form-label fw-bold">Selecciona el almacén a consultar:</label>
+        <select id="almacenSelect" class="form-select form-select-lg shadow-sm">
+          <option value="" selected disabled>Cargando almacenes...</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-2 d-flex align-items-end mt-3 mt-md-0">
+        <button id="btnConsultar" class="btn btn-primary btn-lg w-100 fw-semibold" disabled>
+          <i class="bi bi-search me-2"></i>Consultar
+        </button>
+      </div>
+    </div>
+
+    <!-- Indicador de Carga -->
+    <div id="loadingIndicator" class="alert alert-info shadow-sm d-none">
+      <div class="d-flex align-items-center">
+        <div class="spinner-border spinner-border-sm me-3" role="status"></div>
+        <strong>Consultando base de datos Firebird, por favor espera...</strong>
+      </div>
+    </div>
+
+    <!-- Resultados -->
+    <div class="card shadow-sm border-0 rounded-3">
+      <div class="card-header bg-white py-3">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="mb-0 fw-semibold text-primary">
+            <i class="bi bi-table me-2"></i>Inventario del Almacén
+          </h5>
+          <span id="totalItemsBadge" class="badge bg-secondary">0 Artículos</span>
+        </div>
+        <div class="d-flex gap-2">
+          <div class="input-group flex-grow-1">
+            <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+            <input type="text" id="searchInput" class="form-control border-start-0" placeholder="Buscar dinámicamente por Clave (Prefijo) o Nombre del Artículo..." disabled>
+          </div>
+          <button id="btnExportarPdf" class="btn btn-danger fw-semibold" disabled>
+            <i class="bi bi-file-earmark-pdf-fill me-1"></i> Descargar PDF
+          </button>
+          <button id="btnExportarExcel" class="btn btn-success fw-semibold" disabled>
+            <i class="bi bi-file-earmark-excel-fill me-1"></i> Descargar Excel
+          </button>
+        </div>
+      </div>
+      
+      <!-- Contenedor para mensajes de retroalimentación de Excel (Success / Error) -->
+      <div id="exportAlert" class="alert d-none m-3" role="alert"></div>
+
+      <div class="card-body p-0">
+        <div class="table-container">
+          <table class="table table-hover table-striped align-middle mb-0">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th style="width: 50px;" class="ps-3">#</th>
+                <th>Clave / SKU</th>
+                <th>Nombre del Artículo</th>
+                <th class="text-center">U. Med.</th>
+                <th class="text-end">Existencia</th>
+                <th class="text-end">Último Costo</th>
+                <th class="text-end pe-4">Valor Total</th>
+              </tr>
+            </thead>
+            <tbody id="inventoryTableBody">
+              <tr>
+                <td colspan="7" class="text-center py-5 text-muted">
+                  Selecciona un almacén y presiona Consultar.
+                </td>
+              </tr>
+            </tbody>
+            <tfoot class="table-light sticky-bottom d-none" id="inventoryTableFoot">
+              <tr>
+                <th colspan="4" class="text-end pe-3">TOTALES:</th>
+                <th class="text-end" id="totalExistencia">0</th>
+                <th></th>
+                <th class="text-end pe-4" id="totalValor">$0.00</th>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const almacenSelect = document.getElementById('almacenSelect');
+    const btnConsultar = document.getElementById('btnConsultar');
+    const searchInput = document.getElementById('searchInput');
+    const btnExportarExcel = document.getElementById('btnExportarExcel');
+    const btnExportarPdf = document.getElementById('btnExportarPdf');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    const inventoryTableBody = document.getElementById('inventoryTableBody');
+    const inventoryTableFoot = document.getElementById('inventoryTableFoot');
+    const totalItemsBadge = document.getElementById('totalItemsBadge');
+    const exportAlert = document.getElementById('exportAlert');
+
+    let debounceTimer;
+    let currentData = [];
+
+    // Funciones auxiliares para mostrar mensajes en el DOM
+    function showExportMessage(message, isError = false) {
+      exportAlert.className = `alert m-3 alert-${isError ? 'danger' : 'success'} alert-dismissible show`;
+      exportAlert.innerHTML = `
+        <strong>${isError ? 'Error:' : '¡Éxito!'}</strong> ${message}
+        <button type="button" class="btn-close" onclick="document.getElementById('exportAlert').classList.add('d-none')"></button>
+      `;
+    }
+
+    function hideExportMessage() {
+      exportAlert.classList.add('d-none');
+    }
+
+    // Cargar los almacenes al iniciar
+    async function loadAlmacenes() {
+      try {
+        const response = await fetch('/api/almacenes');
+        const almacenes = await response.json();
+        almacenSelect.innerHTML = '<option value="" selected disabled>Selecciona un almacén...</option>';
+        almacenes.forEach(a => {
+          const opt = document.createElement('option');
+          opt.value = a.almacen_id;
+          opt.textContent = a.nombre;
+          almacenSelect.appendChild(opt);
+        });
+        almacenSelect.addEventListener('change', () => {
+          btnConsultar.disabled = !almacenSelect.value;
+          searchInput.disabled = !almacenSelect.value;
+        });
+      } catch (err) {
+        almacenSelect.innerHTML = '<option value="" disabled>Error cargando almacenes</option>';
+        console.error("Error al cargar almacenes:", err);
+      }
+    }
+
+    const formatCurrency = (val) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(val);
+    const formatNumber = (val) => new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 }).format(val);
+
+    async function fetchInventory(searchQuery = "") {
+      const id = almacenSelect.value;
+      if (!id) return;
+
+      hideExportMessage();
+
+      // Estado de carga UI
+      btnConsultar.disabled = true;
+      almacenSelect.disabled = true;
+      btnExportarExcel.disabled = true;
+      btnExportarPdf.disabled = true;
+      loadingIndicator.classList.remove('d-none');
+      inventoryTableFoot.classList.add('d-none');
+      
+      if (!searchQuery) {
+        inventoryTableBody.innerHTML = `
+          <tr>
+            <td colspan="7" class="text-center py-5 text-muted">
+              <div class="spinner-border text-primary mb-2" role="status"></div>
+              <div>Extrayendo inventario y costos...</div>
+            </td>
+          </tr>`;
+      } else {
+        loadingIndicator.querySelector('strong').textContent = 'Buscando coincidencias...';
+      }
+
+      try {
+        const url = `/api/almacenes/${id}/inventario` + (searchQuery ? `?search_query=${encodeURIComponent(searchQuery)}` : '');
+        const response = await fetch(url);
+        
+        if (!response.ok) throw new Error('Error al consultar inventario');
+        
+        const data = await response.json();
+        currentData = data;
+        
+        if (data.length === 0) {
+          inventoryTableBody.innerHTML = `
+            <tr>
+              <td colspan="7" class="text-center py-5 text-muted">
+                No se encontraron artículos que coincidan en este almacén.
+              </td>
+            </tr>`;
+          totalItemsBadge.textContent = "0 Artículos";
+        } else {
+          let html = '';
+          let sumExistencia = 0;
+          let sumValor = 0;
+
+          data.forEach((item, index) => {
+            sumExistencia += item.existencia;
+            sumValor += item.valor_total;
+            html += `
+              <tr>
+                <td class="ps-3 text-muted small">${index + 1}</td>
+                <td class="fw-bold text-dark">${item.clave}</td>
+                <td>${item.nombre}</td>
+                <td class="text-center"><span class="badge bg-secondary-subtle text-dark">${item.unidad_medida}</span></td>
+                <td class="text-end fw-semibold text-primary">${formatNumber(item.existencia)}</td>
+                <td class="text-end">${formatCurrency(item.ultimo_costo)}</td>
+                <td class="text-end pe-4 fw-bold text-success">${formatCurrency(item.valor_total)}</td>
+              </tr>
+            `;
+          });
+          
+          inventoryTableBody.innerHTML = html;
+          totalItemsBadge.textContent = `${data.length} Artículos`;
+          
+          document.getElementById('totalExistencia').textContent = formatNumber(sumExistencia);
+          document.getElementById('totalValor').textContent = formatCurrency(sumValor);
+          inventoryTableFoot.classList.remove('d-none');
+          btnExportarExcel.disabled = false;
+          btnExportarPdf.disabled = false;
+        }
+      } catch (err) {
+        currentData = [];
+        inventoryTableBody.innerHTML = `
+          <tr>
+            <td colspan="7" class="text-center py-5 text-danger">
+              <i class="bi bi-exclamation-triangle fs-3 d-block mb-2"></i>
+              Error al consultar los datos del almacén: ${err.message}
+            </td>
+          </tr>`;
+      } finally {
+        btnConsultar.disabled = false;
+        almacenSelect.disabled = false;
+        loadingIndicator.classList.add('d-none');
+        loadingIndicator.querySelector('strong').textContent = 'Consultando base de datos Firebird, por favor espera...';
+      }
+    }
+
+    btnConsultar.addEventListener('click', () => {
+      searchInput.value = "";
+      fetchInventory();
+    });
+
+    searchInput.addEventListener('input', (e) => {
+      clearTimeout(debounceTimer);
+      const query = e.target.value;
+      debounceTimer = setTimeout(() => {
+        if (almacenSelect.value) {
+          fetchInventory(query);
+        }
+      }, 400);
+    });
+
+    btnExportarExcel.addEventListener('click', async () => {
+      console.log("Iniciando proceso de descarga...");
+      hideExportMessage();
+      
+      if (!currentData || currentData.length === 0) {
+        showExportMessage("La tabla está vacía. Realiza una consulta primero.", true);
+        return;
+      }
+
+      // Estado de carga visual
+      const originalText = btnExportarExcel.innerHTML;
+      btnExportarExcel.disabled = true;
+      btnExportarExcel.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Generando Excel...';
+
+      try {
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        if (typeof XLSX === 'undefined') {
+          throw new Error("La librería SheetJS no pudo cargarse. Comprueba tu conexión a internet o los permisos de firewall.");
+        }
+
+        const worksheetData = currentData.map(item => ({
+          "Clave / SKU": item.clave,
+          "Nombre del Artículo": item.nombre,
+          "U. Med.": item.unidad_medida,
+          "Existencia": item.existencia,
+          "Último Costo": item.ultimo_costo,
+          "Valor Total": item.valor_total
+        }));
+        
+        const ws = XLSX.utils.json_to_sheet(worksheetData);
+        
+        const wscols = [
+          {wch: 15}, {wch: 50}, {wch: 10}, {wch: 15}, {wch: 15}, {wch: 20}
+        ];
+        ws['!cols'] = wscols;
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Inventario");
+        
+        const nombreAlmacen = almacenSelect.options[almacenSelect.selectedIndex].text.replace(/[^a-zA-Z0-9]/g, '_');
+        const filename = `Inventario_${nombreAlmacen}.xlsx`;
+        
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+
+        // Intentar usar la API nativa de guardado (File System Access API soportada por WebView2)
+        if (window.showSaveFilePicker) {
+          try {
+            const handle = await window.showSaveFilePicker({
+              suggestedName: filename,
+              types: [{
+                description: 'Excel Spreadsheet',
+                accept: {'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']}
+              }]
+            });
+            const writable = await handle.createWritable();
+            await writable.write(wbout);
+            await writable.close();
+            
+            showExportMessage(`Archivo <b>${filename}</b> guardado correctamente en tu equipo.`);
+          } catch (err) {
+            if (err.name === 'AbortError') {
+              console.log("El usuario canceló el guardado.");
+            } else {
+              throw err;
+            }
+          }
+        } else {
+          // Fallback en caso de que la API no esté disponible
+          console.warn("showSaveFilePicker no soportado, intentando descarga con enlace blob.");
+          const blob = new Blob([wbout], { type: 'application/octet-stream' });
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.setAttribute('download', filename);
+          document.body.appendChild(link);
+          link.click();
+          
+          setTimeout(() => {
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            showExportMessage(`Archivo <b>${filename}</b> procesado.`);
+          }, 100);
+        }
+
+      } catch (err) {
+        console.error("Falla en la exportación: ", err);
+        showExportMessage(err.message || "Error desconocido al generar el archivo.", true);
+      } finally {
+        // Restaurar estado visual
+        btnExportarExcel.innerHTML = originalText;
+        btnExportarExcel.disabled = false;
+      }
+    });
+
+    btnExportarPdf.addEventListener('click', async () => {
+      console.log("Iniciando proceso de descarga PDF...");
+      hideExportMessage();
+      
+      if (!currentData || currentData.length === 0) {
+        showExportMessage("La tabla está vacía. Realiza una consulta primero.", true);
+        return;
+      }
+
+      const originalText = btnExportarPdf.innerHTML;
+      btnExportarPdf.disabled = true;
+      btnExportarPdf.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Generando PDF...';
+
+      try {
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        if (typeof window.jspdf === 'undefined' || typeof window.jspdf.jsPDF === 'undefined') {
+          throw new Error("La librería jsPDF no pudo cargarse. Comprueba tu conexión a internet o los permisos de firewall.");
+        }
+
+        const { jsPDF } = window.jspdf;
+        // Formato: horizontal (landscape), puntos (pt), tamaño a4
+        const doc = new jsPDF('landscape', 'pt', 'a4');
+
+        const nombreAlmacen = almacenSelect.options[almacenSelect.selectedIndex].text;
+        const filename = `Reporte_${nombreAlmacen.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+
+        // Añadir título y fecha
+        doc.setFontSize(18);
+        doc.text('Reporte de Inventario', 40, 40);
+        
+        doc.setFontSize(12);
+        doc.text(`Almacén: ${nombreAlmacen}`, 40, 60);
+        
+        const fecha = new Date().toLocaleString('es-MX');
+        doc.text(`Fecha de generación: ${fecha}`, 40, 75);
+
+        // Preparar datos para autotable
+        const tableColumn = ["Clave / SKU", "Nombre del Artículo", "U. Med.", "Existencia", "Último Costo", "Valor Total"];
+        const tableRows = [];
+
+        currentData.forEach(item => {
+          tableRows.push([
+            item.clave,
+            item.nombre,
+            item.unidad_medida,
+            formatNumber(item.existencia),
+            formatCurrency(item.ultimo_costo),
+            formatCurrency(item.valor_total)
+          ]);
+        });
+
+        // Generar tabla dinámica
+        doc.autoTable({
+          head: [tableColumn],
+          body: tableRows,
+          startY: 95,
+          theme: 'striped',
+          styles: { fontSize: 9 },
+          headStyles: { fillColor: [41, 128, 185] },
+          columnStyles: {
+            0: { cellWidth: 70 },   // Clave
+            1: { cellWidth: 'auto' }, // Nombre
+            2: { cellWidth: 50, halign: 'center' }, // U Med
+            3: { cellWidth: 70, halign: 'right' }, // Existencia
+            4: { cellWidth: 70, halign: 'right' }, // Costo
+            5: { cellWidth: 80, halign: 'right' }  // Valor Total
+          },
+          margin: { top: 95 }
+        });
+
+        const pdfOutput = doc.output('arraybuffer');
+
+        if (window.showSaveFilePicker) {
+          try {
+            const handle = await window.showSaveFilePicker({
+              suggestedName: filename,
+              types: [{
+                description: 'PDF Document',
+                accept: {'application/pdf': ['.pdf']}
+              }]
+            });
+            const writable = await handle.createWritable();
+            await writable.write(pdfOutput);
+            await writable.close();
+            
+            showExportMessage(`Archivo <b>${filename}</b> guardado correctamente en tu equipo.`);
+          } catch (err) {
+            if (err.name === 'AbortError') {
+              console.log("El usuario canceló el guardado.");
+            } else {
+              throw err;
+            }
+          }
+        } else {
+          // Fallback
+          const blob = new Blob([pdfOutput], { type: 'application/pdf' });
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.setAttribute('download', filename);
+          document.body.appendChild(link);
+          link.click();
+          
+          setTimeout(() => {
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            showExportMessage(`Archivo <b>${filename}</b> procesado.`);
+          }, 100);
+        }
+
+      } catch (err) {
+        console.error("Falla en la exportación PDF: ", err);
+        showExportMessage(err.message || "Error desconocido al generar el archivo PDF.", true);
+      } finally {
+        btnExportarPdf.innerHTML = originalText;
+        btnExportarPdf.disabled = false;
+      }
+    });
+
+    window.addEventListener('DOMContentLoaded', loadAlmacenes);
+  </script>
+</body>
+</html>
